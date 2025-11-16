@@ -295,4 +295,57 @@ pause(length(x_speech)/Fs + 1);
 % there is little to no difference audibly when using 300 taps as opposed
 % to 160
 
+%% Step 4 — Build Linear-Phase FIR Filters Using h[n] and g[n]
 
+L = 160;                     % desired FIR length
+numFilters = height(FilterTable);
+Anew = cell(numFilters,1);   % linear-phase analysis filters
+
+for k = 1:numFilters
+    h = hBank{k};            % original analysis filter (length = 160)
+    h = cropStoredImpulse(h,160)
+    
+    % --- Synthesis filter (flipped) ---
+    g = flipud(h);           % g[n] = h[L-n]
+    
+    % --- New linear-phase FIR filter ---
+    Anew{k} = conv(h, g);    % length = 2*L - 1 = 319
+end
+
+
+% 1. Plot symmetry of one linear-phase filter
+filterNo = 72;
+
+A = Anew{filterNo};
+
+figure;
+plot(A, "LineWidth", 1.4); hold on;
+xline(L, "--r", "Center tap (n = 160)", LabelVerticalAlignment="bottom");
+
+title("Linear-Phase FIR Filter  A_{"+filterNo+"}[n]   (Length = 319)");
+xlabel("Sample Index"); ylabel("Amplitude");
+grid on;
+
+
+% 2. Magnitude responses of 5 representative filters (normalized)
+
+figure; hold on;
+sel = round(linspace(1, numFilters, 5));    % 5 evenly spaced filters
+
+for k = sel
+    Ak = Anew{k};
+    H = fft(Ak, 1024);
+    f = linspace(0, Fs/2, 512);
+    
+    mag = 20*log10(abs(H(1:512)));
+    mag = mag - max(mag);                  % <-- normalize to 0 dB
+    
+    plot(f, mag, "LineWidth", 1.3);
+end
+
+title("Magnitude Responses of Linear-Phase FIR Filters A_k[n]");
+xlabel("Frequency (Hz)");
+ylabel("Magnitude (dB, normalized)");
+legend("Filter " + string(sel), Location="Best");
+grid on;
+hold off;
