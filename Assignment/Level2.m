@@ -1,3 +1,4 @@
+
 clc
 
 %%functions
@@ -14,12 +15,11 @@ end
 %% Step 1
 % Constants
 DeltaX = ((2.9985-0.02)/(128-1));
-Fs = 16000;     % sampling frequency
+Fs = 16000;
 
-% Filter numbers
 n = (1:128)';  
 
-% Formulas
+% formulas
 fp = 8000 .* 10.^(-0.667 .* (128 - n + 1) .* DeltaX);
 Qp = 5 + ((5 / (max(n) - 1)) .* (n - 1));
 BWp = fp ./ Qp;
@@ -28,11 +28,10 @@ rp = 1 - (BWp ./ Fs) .* pi;
 b1 = 2 .* rp .* cos(thetap);
 b2 = rp .^ 2;
 
-% Combine into table
+% table
 FilterTable = table(n, fp, Qp, BWp, thetap, rp, b1, b2, ...
     'VariableNames', {'Filter_no','fp','Qp','BWp','thetap','rp','b1','b2'});
 
-% Display
 disp(FilterTable)
 
 %% Step 2
@@ -57,12 +56,6 @@ for k = 1:numFilters
     
     [h, t] = impz(b, a);
     impResIIR{k} = h;
-
-    if length(h) < 160
-        h = [h; zeros(160-length(h), 1)];
-    elseif length(h) > 160
-        h = h(1:160);
-    end
 
     [H,f] = freqz(b,a, len, Fs);
     freqRes{k} = H;
@@ -112,7 +105,7 @@ magIIR = magIIR - max(magIIR);  % normalize
 hFULL = impResIIR{filterNo};              % already computed by impz
 hTruncated = cropStoredImpulse(hFULL, len);  % uses your function
 
-[HFIR, fFIR] = freqz(h_trunc, 1, len, Fs);
+[HFIR, fFIR] = freqz(hTruncated, 1, len, Fs);
 magFIR = 20*log10(abs(HFIR));
 magFIR = magFIR - max(magFIR);
 
@@ -156,15 +149,15 @@ hold off;
 
 %% audio magic
 
-function [speechSyn, musicSync, hBank] = runFilterBank(FilterTable, M)
+function [speechSyn, musicSync, hBank, xSpeech, xMusic] = runFilterBank(FilterTable, M)
     Fs = 16000;
     
-    speech_file = 'speech.wav';
-    music_file  = 'music.wav';
+    speechFile = 'speech.wav';
+    musicFile  = 'music.wav';
 
     % load audio
-    [xSpeech, speechFs] = audioread(speech_file);
-    [xMusic,  musicFs] = audioread(music_file);
+    [xSpeech, speechFs] = audioread(speechFile);
+    [xMusic,  musicFs] = audioread(musicFile);
     if speechFs ~= Fs || musicFs ~= Fs
         error('Audio files must be sampled at 16 kHz');
     end
@@ -185,11 +178,7 @@ function [speechSyn, musicSync, hBank] = runFilterBank(FilterTable, M)
     
         % compute long IIR impulse response and modify to length M
         hFULL = impz(b, a, 5000);
-        if length(hFULL) < M
-            h_tr = [hFULL; zeros(M-length(hFULL),1)];
-        else
-            h_tr = hFULL(1:M);
-        end
+        h_tr = cropStoredImpulse(hFULL, M);
 
         %uncommment this for gain thingy
         % [HTmp2, fTmp2] = freqz(h_tr, 1, 512);
@@ -228,13 +217,13 @@ function [speechSyn, musicSync, hBank] = runFilterBank(FilterTable, M)
     % audiowrite("music_synthesized.wav",  music_syn, Fs);
 end
 
-[speech160, music160, hBank] = runFilterBank(FilterTable, 160);
+[speech160, music160, hBank, xSpeech, xMusic] = runFilterBank(FilterTable, 160);
 [speech300, music300] = runFilterBank(FilterTable, 300);
 
 
 figure
 subplot(2,3,1)
-plot(x_speech)
+plot(xSpeech)
 title("speech (og)")
 
 subplot(2,3,2)
@@ -246,7 +235,7 @@ plot(speech300)
 title("speech_syn (300)")
 
 subplot(2,3,4)
-plot(x_music)
+plot(xMusic)
 title("music (og)")
 
 subplot(2,3,5)
@@ -258,16 +247,16 @@ plot(music300)
 title("music_syn (300)")
 
 disp("og speech");
-soundsc(x_speech, Fs);
-pause(length(x_speech)/Fs + 1);
+soundsc(xSpeech, Fs);
+pause(length(xSpeech)/Fs + 1);
 
 disp("reconstructed speech 160");
 soundsc(speech160, Fs);
-pause(length(x_speech)/Fs + 1);
+pause(length(xSpeech)/Fs + 1);
 
 disp("reconstructed speech 300");
 soundsc(speech300, Fs);
-pause(length(x_speech)/Fs + 1);
+pause(length(xSpeech)/Fs + 1);
 
 % disp("og music");
 % soundsc(x_music, Fs);
@@ -296,3 +285,315 @@ pause(length(x_speech)/Fs + 1);
 % to 160
 
 
+%% Step 4
+
+len = 160;
+numFilters = height(FilterTable);
+gBank = cell(numFilters,1);
+ABank = cell(numFilters,1);
+
+for k = 1:numFilters
+    h = cropStoredImpulse(hBank{k}, len);
+
+    % g[n] = h[L - n]
+    g = flipud(h);
+
+    gBank{k} = g;
+    ABank{k} = conv(h, g);
+end
+
+% symmetry
+filterNo = 100;
+
+h = hBank{filterNo};
+h = cropStoredImpulse(h,len);
+g = gBank{filterNo};
+A = ABank{filterNo};
+
+function output = normalise(wave)
+    output = 20*log10(abs(wave));
+    output = output - max(output);
+end
+
+figure;
+% symmtery
+subplot(3,2,[1, 2]);
+plot(A, "LineWidth", 1.4); hold on;
+xline(len, "--r", "Center tap (n = 160)", LabelVerticalAlignment="bottom");
+xlabel("Sample Index"); ylabel("Amplitude");
+grid on;
+
+% mag
+subplot(3,2,3);
+[H,f] = freqz(h,1,1024,Fs);
+plot(f, normalise(H)); 
+xlabel('Frequency (Hz)'); 
+ylabel('Magnitude (dB)');
+title("Magnitude Response (Analysis)");
+ylim([-50 0]);
+xlim([0 8000]);
+grid on;
+
+
+subplot(3,2,5);
+[HA, fA] = freqz(A,1,1024,Fs);
+plot(fA, normalise(HA));
+title("Magnitude Response (Combined)");
+xlabel('Frequency (Hz)'); 
+ylabel('Magnitude (dB)');
+ylim([-50 0]);
+xlim([0 8000]);
+grid on;
+
+% phase
+subplot(3,2,4);
+plot(f, unwrap(angle(H)), 'LineWidth', 1.4); hold on;
+xlabel('Frequency (Hz)'); 
+ylabel('Phase (rad)');
+title("Phase Response (Analysis)");
+ylim([-2 4]);
+grid on;
+
+
+subplot(3,2,6);
+plot(fA, unwrap(angle(HA)));
+xlabel('Frequency (Hz)'); 
+ylabel('Phase (rad)');
+title("Phase Response (Combined)");
+grid on;
+
+figure;
+hold on;
+ylim([-15 0]);
+xlim([0 8]);
+
+filterIndices = round(linspace(1, numFilters, 10));
+for i = 1:10
+    k = filterIndices(i);
+    g = gBank{k};
+    [G,f] = freqz(g,1,1024,Fs);
+
+    plot(f/1000, normalise(G));
+end
+
+%% Step 5: Implementation
+len = 160;
+filterNo = 72;
+
+% magnitude response of analysis
+h = hBank{filterNo};                   
+[H, hf] = freqz(h, 1, len, Fs);
+
+% magnitude response of synthesis filter
+g = gBank{filterNo};                  
+[G, gf] = freqz(g, 1, len, Fs);
+
+figure
+title("mag response of analysis and synthesis filter ")
+plot(gf, normalise(G))
+hold on
+plot(hf, normalise(H))
+
+xlim([0 8000]);
+ylim([-50 0])
+
+figure
+plot(h)
+figure
+plot(g)
+
+%160
+
+speechFile = 'speech.wav';
+musicFile  = 'music.wav';
+
+% load audio exactly same as your runFilterBank
+[xSpeech, speechFs] = audioread(speechFile);
+[xMusic,  musicFs] = audioread(musicFile);
+
+if speechFs ~= Fs || musicFs ~= Fs
+    error('Audio files must be sampled at 16 kHz');
+end
+
+% convert to mono (same as before)
+if size(xSpeech,2) > 1, xSpeech = mean(xSpeech,2); end
+if size(xMusic,2)  > 1, xMusic  = mean(xMusic,2);  end
+
+numFilters = height(FilterTable);
+
+% allocate outputs
+speechCombined = zeros(size(xSpeech));
+musicCombined  = zeros(size(xMusic));
+
+for k = 1:numFilters
+    Ak = ABank{k};
+
+    % filter each signal through the combined filter
+    speechCombined = speechCombined + conv(xSpeech, Ak, 'same');
+    musicCombined  = musicCombined  + conv(xMusic,  Ak, 'same');
+end
+
+% normalise
+speechCombined = speechCombined ./ max(abs(speechCombined));
+musicCombined  = musicCombined  ./ max(abs(musicCombined));
+
+%300
+M = 300;
+
+[speech300_full, music300_full, hBank300, xSpeech, xMusic] = runFilterBank(FilterTable, M);
+numFilters = height(FilterTable);
+
+gBank300 = cell(numFilters,1);
+ABank300 = cell(numFilters,1);
+
+for k = 1:numFilters
+    h = cropStoredImpulse(hBank300{k}, M);
+    g = flipud(h);
+
+    gBank300{k} = g;
+    ABank300{k} = conv(h, g);
+end
+
+speechCombined300 = zeros(size(xSpeech));
+musicCombined300  = zeros(size(xMusic));
+
+for k = 1:numFilters
+    Ak = ABank300{k};
+    speechCombined300 = speechCombined300 + conv(xSpeech, Ak, 'same');
+    musicCombined300  = musicCombined300  + conv(xMusic,  Ak, 'same');
+end
+
+% normalise
+speechCombined300 = speechCombined300 ./ max(abs(speechCombined300));
+musicCombined300  = musicCombined300  ./ max(abs(musicCombined300));
+
+% PLAYBACK
+disp("Original speech");
+soundsc(xSpeech, Fs);
+pause(length(xSpeech)/Fs + 1);
+
+disp("Reconstructed speech (160)");
+soundsc(speechCombined, Fs);
+pause(length(xSpeech)/Fs + 1);
+
+disp("Reconstructed speech (300)");
+soundsc(speechCombined300, Fs);
+pause(length(xSpeech)/Fs + 1);
+
+disp("Original music");
+soundsc(xMusic, Fs);
+pause(length(xMusic)/Fs + 1);
+
+disp("Reconstructed music (160)");
+soundsc(musicCombined, Fs);
+pause(length(xMusic)/Fs + 1);
+
+disp("Reconstructed music (300)");
+soundsc(musicCombined300, Fs);
+pause(length(xMusic)/Fs + 1);
+
+% optional plots
+figure;
+subplot(2,2,1); plot(speechCombined300); title("Reconstructed Speech (300)");
+subplot(2,2,2); plot(musicCombined300);  title("Reconstructed Music (300)");
+subplot(2,2,3); plot(speechCombined); title("Reconstructed Speech (160)");
+subplot(2,2,4); plot(musicCombined);  title("Reconstructed Music (160)");
+
+
+%% Step 6
+frame_duration = 0.02; % 20 ms
+Fs = 16000;
+frameLen = round(frame_duration * Fs);
+numFilters = height(FilterTable);
+M = 160; % FIR length
+
+noisy_files = {'noise10db.wav', 'noise0db.wav'};
+for noisySeg = 1:length(noisy_files)
+    noisyFile = noisy_files{noisySeg};
+    [xNoisy, fsNoisy] = audioread(noisyFile);
+    if fsNoisy ~= Fs
+        error('Noisy file must be sampled at 16 kHz');
+    end
+    if size(xNoisy,2) > 1, xNoisy = mean(xNoisy,2); end
+
+    % pad
+    num_frames = ceil(length(xNoisy)/frameLen);
+    x_noisy_padded = [xNoisy; zeros(num_frames*frameLen - length(xNoisy),1)];
+
+    % filters
+    hBank = cell(numFilters,1);
+    for k = 1:numFilters
+        b1k = FilterTable.b1(k);
+        b2k = FilterTable.b2(k);
+        b = [1 0 -1];
+        a = [1 -b1k b2k];
+        hFULL = impz(b, a, 5000);
+        if length(hFULL) < M
+            h_tr = [hFULL; zeros(M-length(hFULL),1)];
+        else
+            h_tr = hFULL(1:M);
+        end
+        hBank{k} = h_tr;
+    end
+
+    subbands = zeros(numFilters, num_frames*frameLen);
+    for k = 1:numFilters
+        hk = hBank{k};
+        subbands(k,:) = conv(x_noisy_padded, hk, 'same');
+    end
+
+    % estimate noise pwoer
+    noise_frames = 10;
+    sigma_w2 = zeros(numFilters,1);
+    for k = 1:numFilters
+        noise_energy = 0;
+        for f = 1:noise_frames
+            idx = (f-1)*frameLen+1 : f*frameLen;
+            noise_energy = noise_energy + sum(subbands(k,idx).^2);
+        end
+        sigma_w2(k) = noise_energy / (noise_frames*frameLen);
+    end
+
+    % denoising by frame
+    mu = 1;
+    subbandsDenoised = zeros(size(subbands));
+    for f = 1:num_frames
+        idx = (f-1)*frameLen+1 : f*frameLen;
+        for k = 1:numFilters
+            frame = subbands(k,idx);
+            sigmaS2 = mean(frame.^2);
+
+            sigmaSpeech2 = max(sigmaS2 - sigma_w2(k), 0);
+
+            Km = sigmaSpeech2 / (sigmaSpeech2 + mu*sigma_w2(k) + eps);
+
+            subbandsDenoised(k,idx) = Km * frame;
+        end
+    end
+
+    % reconstruct denoised signal
+    xDenoised = sum(subbandsDenoised,1)';
+    xDenoised = xDenoised(1:length(xNoisy)); % remove padding
+    xDenoised = xDenoised / max(abs(xDenoised));
+
+    %noisy first
+    soundsc(xNoisy, Fs);
+    pause(length(xNoisy)/Fs + 1);
+    % denoised second
+    soundsc(xDenoised, Fs);
+    pause(length(xNoisy)/Fs + 1);
+
+    % plot
+    t = (0:length(xNoisy)-1)/Fs;
+    figure;
+    subplot(2,1,1); plot(t, xNoisy); 
+    title(['Noisy Speech: ' noisyFile]); 
+    xlabel('Time (s)'); 
+    ylabel('Amplitude');
+
+
+    subplot(2,1,2); plot(t, xDenoised); 
+    title('Denoised Speech'); 
+    xlabel('Time (s)'); 
+    ylabel('Amplitude');
+end
