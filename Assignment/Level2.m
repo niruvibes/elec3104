@@ -101,15 +101,15 @@ fIIR = freqVectors{filterNo};
 magIIR = 20*log10(abs(HIIR));
 magIIR = magIIR - max(magIIR);  % normalize
 
-% --- FIR truncated version using stored impulse response ---
-hFULL = impResIIR{filterNo};              % already computed by impz
-hTruncated = cropStoredImpulse(hFULL, len);  % uses your function
+% fir
+hFULL = impResIIR{filterNo};
+hTruncated = cropStoredImpulse(hFULL, len);
 
 [HFIR, fFIR] = freqz(hTruncated, 1, len, Fs);
 magFIR = 20*log10(abs(HFIR));
 magFIR = magFIR - max(magFIR);
 
-% --- Plot ---
+% Plot
 figure
 plot(fIIR, magIIR, 'LineWidth', 1.5)
 hold on
