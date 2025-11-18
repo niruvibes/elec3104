@@ -1,0 +1,262 @@
+% i hope i copied this from my level 3 properly
+function [frameEnergies, fp] = spectrum_analyser(x, Fs)
+
+    N = 128;
+    DeltaX = ((2.9985-0.02)/(N-1));
+    filter_index = (1:128)';  
+
+    % formulas
+    fp = 8000 .* 10.^(-0.667 .* (128 - filter_index + 1) .* DeltaX);
+    Qp = 5 + ((5 / (max(filter_index) - 1)) .* (filter_index - 1));
+    BWp = fp ./ Qp;
+    thetap = 2 .* pi .* fp ./ Fs;
+    rp = 1 - (BWp ./ Fs) .* pi;
+    b1 = 2 .* rp .* cos(thetap);
+    b2 = rp .^ 2;
+
+    iirBank = zeros(3, N);
+    for k = 1:N
+        iirBank(:, k) = [1; -b1(k); b2(k)];
+    end
+
+    iirBank = zeros(3, N);
+    for k = 1:N
+        iirBank(:, k) = [1; -b1(k); b2(k)];
+    end
+
+    b_bp = [1];
+    kGain = zeros(N,1);
+    LTest = Fs;
+    n_test = 0:LTest-1;
+    for k = 1:N
+        testSig = sin(2*pi*fp(k)*n_test/Fs);
+        
+        a = iirBank(:,k).';
+        y = filter(b_bp, a, testSig); 
+        
+        kGain(k) = 1 / max(abs(y));
+    end
+
+    % filter through all channels
+    L = length(x);
+    s = zeros(L, N);
+    for k = 1:N
+        a = iirBank(:, k).';
+        y = filter(b_bp, a, x(:));
+        s(:,k) = kGain(k) * y;
+    end
+
+    % spat diff
+    d = s(:,1:end-1) - s(:,2:end);
+    e = d(:,1:end-1) - d(:,2:end);
+
+    % first hair cell model
+    fc = 30;
+    c0 = exp(-2*pi*fc/Fs);
+    eRectified = max(e, 0);
+    v = zeros(size(eRectified));
+    for n = 2:size(eRectified,1)
+        v(n,:) = (1 - c0) * eRectified(n,:) + c0 * v(n-1,:);
+    end
+
+    % Frame-based energy calculation (20 ms frames)
+    frame_len = round(0.02 * Fs); % 20 ms
+    numFrames = floor(size(eRectified,1) / frame_len);
+    frameEnergies = zeros(numFrames, size(eRectified,2));
+    for k = 1:numFrames
+        frameStart = (k-1)*frame_len + 1;
+        frameEnd   = k*frame_len;
+        frameBlock = v(frameStart:frameEnd, :);
+        frameEnergies(k,:) = sum(frameBlock, 1);
+    end
+end
+%% load audio and downsample (my mic doesnt do 16khz)
+
+[input_audio, original_fs] = audioread('wewereaway.wav');
+
+Fs = 16000;
+[weWereAway, ~] = resample(input_audio, Fs, original_fs);
+
+if size(weWereAway,2) > 1
+    weWereAway = mean(weWereAway, 2); % convert to mono by averaging channels
+end
+
+%% play sound
+soundsc(weWereAway, Fs);
+
+%% fundamental frequency estimation
+
+% function frequency = findFundFreq(start, frameLen, wave, Fs) 
+%     frame_samples = wave(start : start + frameLen - 1);
+% 
+%     [peaks, locs] = findpeaks(frame_samples, "MinPeakHeight", 0.01)
+% 
+%     % Calculate all distances between consecutive peaks
+%     peak_diffs = diff(locs);
+%     % Find the most common distance (mode) as the pitch period
+%     N = mode(peak_diffs);
+% 
+%     % Plot the frame
+%     figure;
+%     plot(frame_samples);
+%     title('20 ms Frame');
+%     xlabel('Sample');
+%     ylabel('Amplitude');
+%     plot(locs, peaks, 'ro'); % Mark all detected peaks
+% 
+% 
+%     F0 = Fs / N;
+% 
+%     fprintf("fundamental frequencyu is: " + F0);
+% end
+% 
+% findFundFreq(startSample + 2*frameLen , frameLen, weWereAway, Fs);
+% findFundFreq(startSample + 12*frameLen , frameLen, weWereAway, Fs);
+
+length = 0.02;
+frameLen = Fs * length
+
+startSample = 0.28 * Fs % start when there actually is speech
+
+function F0 = showFrame(start, frameLen, wave, Fs)
+    frame = wave(start : start + frameLen - 1);
+
+    % Find peaks (just to help manual counting)
+    [peaks, locs] = findpeaks(frame, "MinPeakHeight", 0.01);
+
+    % Plot frame
+    figure;
+    plot(frame); hold on;
+    plot(locs, peaks, 'ro');
+    title('20 ms Speech Frame');
+    xlabel('Sample index');
+    ylabel('Amplitude');
+
+    disp("locs:");
+    disp(locs);
+
+    peak1 = input("first peak: ");
+    peak2 = input("second peak: ");
+
+    % Compute pitch period
+    N = abs(peak2 - peak1);
+    F0 = Fs / N;
+
+    fprintf("\nPitch period N = %d samples\n", N);
+    fprintf("Fundamental frequency F0 = %.2f Hz\n", F0);
+end
+
+% Show two different frames (as assignment requires)
+F0Frame1 = showFrame(startSample + 6*frameLen , frameLen, weWereAway, Fs)
+F0Frame2 = showFrame(startSample + 12*frameLen , frameLen, weWereAway, Fs)
+
+%% task 2 part 1
+length = 0.02;
+frameLen = Fs * length
+
+startSample = 0.28 * Fs % start when there actually is speech
+noFrames = (size(weWereAway, 1) - startSample)/frameLen;
+
+frame3Start = startSample + 3*frameLen;
+frame = weWereAway(frame3Start: frame3Start + frameLen);   
+
+function [F0, e] = estimateF0(frame, Fs)
+    a = lpc(frame, 12);
+    e = filter(a, 1, frame); % glottal excitation????
+    
+
+    [frameEnergies, fp] = spectrum_analyser(e, Fs);
+    idx = fp <= 320;
+    energyLow = frameEnergies(1, idx);
+    fpLow = fp(idx);
+    
+    % Find all peaks and pick lowest-frequency peak as F0
+    [~, locs] = findpeaks(energyLow, fpLow);
+    if isempty(locs)
+        F0 = NaN;
+    else
+        F0 = locs(1)/2;
+    end
+
+end
+
+F0 = estimateF0(frame, Fs);
+fprintf("Auto F0 is " + F0);
+
+%% auto f0 estimate for all frames
+frameLen = round(0.02 * Fs);
+numFrames = floor(size(weWereAway, 1) / frameLen);
+
+f0s = zeros(numFrames, 1);
+excitation = zeros(size(weWereAway));
+timeAxis = ((0:numFrames-1) * frameLen)/Fs;  % time in seconds
+
+for i = 1:numFrames
+    idx = (1:frameLen) + (i-1)*frameLen;
+    if idx(end) > size(weWereAway, 1)
+        break;
+    end
+    frame = weWereAway(idx);
+    [f0s(i), eFrame] = estimateF0(frame, Fs);
+    excitation(idx) = eFrame; 
+end
+
+% Plot results
+figure;
+subplot(3,1,1);
+plot((0:size(weWereAway, 1)-1)/Fs, weWereAway);
+title('Speech signal s(n)');
+xlabel('Time (s)'); ylabel('Amplitude');
+
+subplot(3,1,2);
+plot((0:size(excitation, 1)-1)/Fs, excitation);
+title('Estimated Glottal Excitation e(n)');
+xlabel('Time (s)'); ylabel('Amplitude');
+
+subplot(3,1,3);
+plot(timeAxis, f0s, 'o-');
+title('Estimated Fundamental Frequency f_0');
+xlabel('Time (s)'); ylabel('Frequency (Hz)');
+ylim([0 400]);
+grid on;
+
+%% part 3
+Fs = 16000;
+f_low = 320;
+f_high = 7500;
+order = 6; % just choose a random one based on graph
+
+% bandpass fitler
+[b, a] = butter(order, [f_low, f_high]/(Fs/2), 'bandpass');
+speech_filtered = filter(b, a, weWereAway);
+
+% % listen
+% soundsc(weWereAway, Fs); 
+% pause(size(weWereAway, 1)/Fs + 1);
+% soundsc(speech_filtered, Fs);
+
+% the signal without the fundamental freqnecy sounds alot tinnier and is
+% less full that the original but speech is still recognisable
+
+frameLen = round(0.02 * Fs); % 20 ms
+frameStart1 = round(0.28 * Fs);       
+frameStart2 = frameStart1 + 12*frameLen;  
+
+frame1 = speech_filtered(frameStart1 : frameStart1 + frameLen - 1);
+frame2 = speech_filtered(frameStart2 : frameStart2 + frameLen - 1);
+
+energy_frame1 = sum(frame1.^2);
+energy_frame2 = sum(frame2.^2);
+t_orig = (0:length(weWereAway)-1)/Fs;
+t_filt = (0:length(speech_filtered)-1)/Fs;
+
+figure;
+subplot(3,1,1);
+plot((0:size(weWereAway,1)-1)/Fs, weWereAway);
+title('Original Speech s(n)');
+xlabel('Time [s]'); ylabel('Amplitude');
+
+subplot(3,1,2);
+plot((0:size(speech_filtered,1)-1)/Fs, speech_filtered);
+title('Filtered Speech (320 Hz - 7.5 kHz)');
+xlabel('Time [s]'); ylabel('Amplitude');

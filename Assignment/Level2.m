@@ -67,19 +67,25 @@ subplot(2,3,1)
 plot(impResIIR{45})
 title("IIR Impulse Response (Filter 45)")
 xlim([0 200])
+xlabel("Sample number")
 
 subplot(2,3,4)
 plot(impResIIR{65})
 title("IIR Impulse Response (Filter 65)")
 xlim([0 200])
+xlabel("Sample number")
 
 subplot(2,3,2)
 plot(freqVectors{100}, 20*log10(abs(freqRes{100})))
 title("Mag Response Filter 100")
+xlabel("Frequency (Hz)")
+ylabel("Magnitude (dB)")
 
 subplot(2,3,5)
 plot(freqVectors{100}, unwrap(angle(freqRes{100})))
 title("Phase Response Filter 100")
+xlabel("Frequency (Hz)")
+ylabel("Phase (Rads)")
 
 subplot(2,3,[3,6])
 plot(freqVectors{45}, 20*log10(abs(freqz(cropStoredImpulse(impResIIR{45},160),1, len, Fs))))
@@ -89,6 +95,8 @@ plot(freqVectors{65}, 20*log10(abs(freqz(cropStoredImpulse(impResIIR{65},160),1,
 plot(freqVectors{65}, 20*log10(abs(freqRes{65})))
 hold off
 title("FIR vs IIR (Filters 45 & 65)")
+xlabel("Frequency (Hz)")
+ylabel("Magnitude (dB)")
 
 %% Step 3
 
@@ -146,6 +154,7 @@ ylabel("Magnitude (dB)");
 title("Magnitude Responses of 10 IIR Filters (Normalised)");
 legend(cellstr(string(selectedFilters)));
 hold off;
+ylim([-15, 0])
 
 %% audio magic
 
@@ -246,17 +255,17 @@ subplot(2,3,6)
 plot(music300)
 title("music_syn (300)")
 
-disp("og speech");
-soundsc(xSpeech, Fs);
-pause(length(xSpeech)/Fs + 1);
-
-disp("reconstructed speech 160");
-soundsc(speech160, Fs);
-pause(length(xSpeech)/Fs + 1);
-
-disp("reconstructed speech 300");
-soundsc(speech300, Fs);
-pause(length(xSpeech)/Fs + 1);
+% disp("og speech");
+% soundsc(xSpeech, Fs);
+% pause(length(xSpeech)/Fs + 1);
+% 
+% disp("reconstructed speech 160");
+% soundsc(speech160, Fs);
+% pause(length(xSpeech)/Fs + 1);
+% 
+% disp("reconstructed speech 300");
+% soundsc(speech300, Fs);
+% pause(length(xSpeech)/Fs + 1);
 
 % disp("og music");
 % soundsc(x_music, Fs);
@@ -376,6 +385,11 @@ for i = 1:10
     plot(f/1000, normalise(G));
 end
 
+xlabel("Frequency (Hz)");
+ylabel("Magnitude (dB)");
+title("Magnitude Responses of 10 synthesis Filters (Normalised)");
+ylim([-15 0])
+
 %% Step 5: Implementation
 len = 160;
 filterNo = 72;
@@ -389,18 +403,14 @@ g = gBank{filterNo};
 [G, gf] = freqz(g, 1, len, Fs);
 
 figure
-title("mag response of analysis and synthesis filter ")
-plot(gf, normalise(G))
+plot(h, 'b', 'DisplayName', 'Analysis (h)')
 hold on
-plot(hf, normalise(H))
-
-xlim([0 8000]);
-ylim([-50 0])
-
-figure
-plot(h)
-figure
-plot(g)
+plot(g, 'r', 'DisplayName', 'Synthesis (g)')
+hold off
+legend('show')
+title('Impulse Responses of Analysis and Synthesis Filters')
+xlabel('Sample Index')
+ylabel('Amplitude')
 
 %160
 
@@ -468,29 +478,29 @@ speechCombined300 = speechCombined300 ./ max(abs(speechCombined300));
 musicCombined300  = musicCombined300  ./ max(abs(musicCombined300));
 
 % PLAYBACK
-disp("Original speech");
-soundsc(xSpeech, Fs);
-pause(length(xSpeech)/Fs + 1);
-
-disp("Reconstructed speech (160)");
-soundsc(speechCombined, Fs);
-pause(length(xSpeech)/Fs + 1);
-
-disp("Reconstructed speech (300)");
-soundsc(speechCombined300, Fs);
-pause(length(xSpeech)/Fs + 1);
-
-disp("Original music");
-soundsc(xMusic, Fs);
-pause(length(xMusic)/Fs + 1);
-
-disp("Reconstructed music (160)");
-soundsc(musicCombined, Fs);
-pause(length(xMusic)/Fs + 1);
-
-disp("Reconstructed music (300)");
-soundsc(musicCombined300, Fs);
-pause(length(xMusic)/Fs + 1);
+% disp("Original speech");
+% soundsc(xSpeech, Fs);
+% pause(length(xSpeech)/Fs + 1);
+% 
+% disp("Reconstructed speech (160)");
+% soundsc(speechCombined, Fs);
+% pause(length(xSpeech)/Fs + 1);
+% 
+% disp("Reconstructed speech (300)");
+% soundsc(speechCombined300, Fs);
+% pause(length(xSpeech)/Fs + 1);
+% 
+% disp("Original music");
+% soundsc(xMusic, Fs);
+% pause(length(xMusic)/Fs + 1);
+% 
+% disp("Reconstructed music (160)");
+% soundsc(musicCombined, Fs);
+% pause(length(xMusic)/Fs + 1);
+% 
+% disp("Reconstructed music (300)");
+% soundsc(musicCombined300, Fs);
+% pause(length(xMusic)/Fs + 1);
 
 % optional plots
 figure;

@@ -1,3 +1,6 @@
+clear
+clc
+
 %% function
 function output = normalise(wave)
     output = 20*log10(abs(wave));
@@ -98,21 +101,24 @@ subplot(5,1,1)
 plot(1:N, s(t_time,:));
 title('Displacement before spatial differentiation s_1[n]...s_N[n]');
 xlim([1 N]);
+xlabel("displacement")
 
 subplot(5,1,2)
 plot(1:N-1, d(t_time,:));
 title('Displacement after first spatial differentiation d_1[n]...d_N[n]');
 xlim([1 N]);
+xlabel("displacement")
 
 subplot(5,1,3)
 plot(1:N-2, e(t_time,:));
 title('Displacement after second spatial differentiation e_1[n]...e_N[n]');
 xlim([1 N]);
+xlabel("displacement")
 
 % First hair cell output (Model 1)
 subplot(5,1,4)
 plot(1:N-2, v(t_time, :))
-xlabel('Filter index');
+
 ylabel('Energy');
 title('Inner hair cell output 1 E_1[n]...E_N[n]');
 xlim([1 N]);
@@ -184,7 +190,7 @@ nTest = 0:(LTest-1);
 for m = 1:N
     test_sig = sin(2*pi*fp(m)*nTest/Fs);
     a = iirBank(:,m).';
-    y = filter(b, a, test_sig);
+    y = filter(b_bp, a, test_sig);
     kGain(m) = 1 / max(abs(y));
 end
 
@@ -200,7 +206,7 @@ end
 s = zeros(L, N);
 for m = 1:N
     a = iirBank(:,m).';
-    s(:,m) = kGain(m) * filter(b, a, x);
+    s(:,m) = kGain(m) * filter(b_bp, a, x);
 end
 
 d = s(:,1:end-1) - s(:,2:end);
